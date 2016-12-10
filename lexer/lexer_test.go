@@ -49,6 +49,7 @@ func TestSymbols(t *testing.T) {
 		{token.LPAREN, "("},
 		{token.RPAREN, ")"},
 		{token.SEMICOLON, ";"},
+		{token.EOF, "(EOF)"},
 	}
 
 	runTokenMatches(t, source, tests)
@@ -160,6 +161,68 @@ func TestIdentifiers(t *testing.T) {
 	tests := []TokenMatcher{
 		{token.IDENT, "_testThis"},
 		{token.IDENT, "UpperW1thNum"},
+		{token.EOF, "(EOF)"},
+	}
+
+	runTokenMatches(t, source, tests)
+}
+
+func TestString(t *testing.T) {
+	source := `"double" 'single'`
+
+	tests := []TokenMatcher{
+		{token.STRING, "double"},
+		{token.STRING, "single"},
+		{token.EOF, "(EOF)"},
+	}
+
+	runTokenMatches(t, source, tests)
+}
+
+func TestSnippet(t *testing.T) {
+	source := `
+// Jsonnet Example
+{
+	person1: {
+		name: "Alice",
+		welcome: "Hello " + self.name + "!",
+	},
+	person2: self.person1 { name: "Bob" },
+}
+`
+	tests := []TokenMatcher{
+		{token.LBRACE, "{"},
+		{token.IDENT, "person1"},
+		{token.COLON, ":"},
+		{token.LBRACE, "{"},
+		{token.IDENT, "name"},
+		{token.COLON, ":"},
+		{token.STRING, "Alice"},
+		{token.COMMA, ","},
+		{token.IDENT, "welcome"},
+		{token.COLON, ":"},
+		{token.STRING, "Hello "},
+		{token.PLUS, "+"},
+		{token.SELF, "self"},
+		{token.DOT, "."},
+		{token.IDENT, "name"},
+		{token.PLUS, "+"},
+		{token.STRING, "!"},
+		{token.COMMA, ","},
+		{token.RBRACE, "}"},
+		{token.COMMA, ","},
+		{token.IDENT, "person2"},
+		{token.COLON, ":"},
+		{token.SELF, "self"},
+		{token.DOT, "."},
+		{token.IDENT, "person1"},
+		{token.LBRACE, "{"},
+		{token.IDENT, "name"},
+		{token.COLON, ":"},
+		{token.STRING, "Bob"},
+		{token.RBRACE, "}"},
+		{token.COMMA, ","},
+		{token.RBRACE, "}"},
 		{token.EOF, "(EOF)"},
 	}
 

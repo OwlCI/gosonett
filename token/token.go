@@ -13,10 +13,10 @@ func New(tokenType TokenType, val string) Token {
 
 const (
 	// Special Lexemes
-	EOF   = "EOF"
-	IDENT = "IDENT"
+	EOF    = "EOF"
+	IDENT  = "IDENT"
+	STRING = "STRING"
 
-	// TODO: Symbols
 	// {}[],.();
 	LBRACE    = "{"
 	RBRACE    = "}"

@@ -1,6 +1,7 @@
 package lexer
 
 import (
+	"fmt"
 	"github.com/owlci/gosonett/token"
 	"unicode"
 )
@@ -17,6 +18,10 @@ func (lp *LexerPosition) NextLine() {
 
 func (lp *LexerPosition) NextChar() {
 	lp.lineChar++
+}
+
+func (lp *LexerPosition) Format() string {
+	return fmt.Sprintf("%w:%w", lp.line, lp.lineChar)
 }
 
 type Lexer struct {
@@ -96,6 +101,8 @@ func (l *Lexer) Tokenize() token.Token {
 	char := l.CurrentChar()
 	str := string(char)
 
+	// fmt.Printf("(current:%d)%q\n", l.index, char)
+
 	switch char {
 	case EOF:
 		tok = token.New(token.EOF, "(EOF)")
@@ -170,6 +177,12 @@ func (l *Lexer) Tokenize() token.Token {
 	case '#':
 		l.eatCurrentLine()
 		return l.Tokenize()
+	case '"', '\'':
+		// Whatever the opening char, we expect a closing char to match
+		// but skip the first occurance since it starts the string
+		l.NextChar()
+		stringValue := l.eatUntil(char)
+		tok = token.New(token.STRING, stringValue)
 	// case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 	// token, _ := l.lexNumber()
 	default:
@@ -199,19 +212,34 @@ func (l *Lexer) eatWhitespace() {
 	}
 }
 
-func (l *Lexer) eatUntil(untilChar rune) {
+// TODO: This should panic if it doesn't find *untilChar* and reaches EOF
+func (l *Lexer) eatUntil(untilChar rune) string {
+	var eatenStr string
+
 	for l.CurrentChar() != untilChar {
-		l.NextChar()
+		char := l.NextChar()
+		// fmt.Printf("  (eat:%d) %q\n", l.index, char)
+
+		eatenStr = eatenStr + string(char)
 	}
 
-	// Point to the byte after our until
+	return eatenStr
+}
+
+func (l *Lexer) eatUntilAfter(untilChar rune) string {
+	eatenStr := l.eatUntil(untilChar)
+
+	// Point to the byte after our untilChar
 	l.NextChar()
+
+	return eatenStr
 }
 
 func (l *Lexer) eatCurrentLine() {
-	l.eatUntil('\n')
+	l.eatUntilAfter('\n')
 }
 
+// TODO...
 func (l *Lexer) eatMultiLineComment() {
 }
 
@@ -223,6 +251,8 @@ func (l *Lexer) lexIdentifier() (token.Token, error) {
 
 	for isIdentifier(l.CurrentChar()) {
 		char = l.NextChar()
+
+		// fmt.Printf("  (ident:%d) %q\n", l.index-1, char)
 
 		if char == EOF {
 			break
@@ -238,6 +268,11 @@ func (l *Lexer) lexIdentifier() (token.Token, error) {
 	}
 
 	ident := l.Source[startIndex:endIndex]
+
+	// Backtrack one char to end on the last byte of the identifier/keyword
+	l.index--
+
+	// fmt.Printf("  (ident_end_on:%d) %q\n", l.index, l.CurrentChar())
 
 	// matchKeyword and return keyword token
 	tokenType := token.GetKeywordKind(ident)
