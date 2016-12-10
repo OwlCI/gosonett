@@ -7,8 +7,8 @@ type Token struct {
 	Value string
 }
 
-func New(tokenType TokenType, char byte) Token {
-	return Token{Type: tokenType, Value: string(char)}
+func New(tokenType TokenType, val string) Token {
+	return Token{Type: tokenType, Value: val}
 }
 
 const (

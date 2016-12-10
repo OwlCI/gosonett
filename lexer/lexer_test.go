@@ -11,11 +11,20 @@ type TokenMatcher struct {
 }
 
 func runTokenMatches(t *testing.T, source string, tests []TokenMatcher) {
-	testsLength := len(tests)
 	lexer := New(source)
+	tokens := lexer.Lex()
+	testsLength := len(tests)
+	tokensLength := len(tokens)
 
-	for _, tm := range tests {
-		tok := lexer.Tokenize()
+	// t.Logf("Lengths match: %d, %d\n", testsLength, tokensLength)
+	// t.Logf("%v\n", tokens)
+
+	if testsLength != tokensLength {
+		t.Fatalf("Wrong token array length: expected=%d, got=%d", tokensLength, testsLength)
+	}
+
+	for i, tok := range tokens {
+		tm := tests[i]
 
 		if tok.Type != tm.expectedType {
 			t.Fatalf("Wrong token type: expected=%q, got=%q", tm.expectedType, tok.Type)
@@ -24,12 +33,6 @@ func runTokenMatches(t *testing.T, source string, tests []TokenMatcher) {
 		if tok.Value != tm.expectedValue {
 			t.Fatalf("Wrong token value: expected=%q, got=%q", tm.expectedValue, tok.Value)
 		}
-	}
-
-	tokensArrayLength := len(lexer.Tokens)
-
-	if testsLength != tokensArrayLength {
-		t.Fatalf("Wrong token array length: expected=%d, got=%d", testsLength, tokensArrayLength)
 	}
 }
 
@@ -70,6 +73,7 @@ func TestOperators(t *testing.T) {
 		{token.STAR, "*"},
 		{token.SLASH, "/"},
 		{token.PERC, "%"},
+		{token.EOF, "(EOF)"},
 	}
 
 	runTokenMatches(t, source, tests)
@@ -82,6 +86,7 @@ func TestWhitepace(t *testing.T) {
 		{token.BANG, "!"},
 		{token.ASSIGN, "="},
 		{token.PERC, "%"},
+		{token.EOF, "(EOF)"},
 	}
 
 	runTokenMatches(t, source, tests)
@@ -98,6 +103,7 @@ func TestComments(t *testing.T) {
 		{token.BANG, "!"},
 		{token.ASSIGN, "="},
 		{token.BANG, "!"},
+		{token.EOF, "(EOF)"},
 	}
 
 	runTokenMatches(t, source, tests)
@@ -142,6 +148,7 @@ super
 		{token.NULL, "null"},
 		{token.SELF, "self"},
 		{token.SUPER, "super"},
+		{token.EOF, "(EOF)"},
 	}
 
 	runTokenMatches(t, source, tests)
@@ -153,6 +160,7 @@ func TestIdentifiers(t *testing.T) {
 	tests := []TokenMatcher{
 		{token.IDENT, "_testThis"},
 		{token.IDENT, "UpperW1thNum"},
+		{token.EOF, "(EOF)"},
 	}
 
 	runTokenMatches(t, source, tests)

@@ -1,7 +1,6 @@
 package lexer
 
 import (
-	"errors"
 	"github.com/owlci/gosonett/token"
 	"unicode"
 )
@@ -26,7 +25,10 @@ type Lexer struct {
 	Position     LexerPosition // represents position of char with new lines, good for debugging.
 	index        int           // hold the current index of currentChar within the whole input string
 	sourceLength int
+	reachedEnd   bool
 }
+
+const EOF = '\x00'
 
 func New(source string) *Lexer {
 	return &Lexer{
@@ -34,6 +36,7 @@ func New(source string) *Lexer {
 		Position:     LexerPosition{line: 0, lineChar: 0},
 		index:        0,
 		sourceLength: len(source),
+		reachedEnd:   false,
 	}
 }
 
@@ -42,19 +45,21 @@ func (l *Lexer) willOverflow() bool {
 }
 
 // NOTE: This might need to rune, depending on what character set jsonet supports.
-func (l *Lexer) CurrentChar() byte {
-	return l.Source[l.index]
-}
-
-func (l *Lexer) NextChar() (byte, error) {
-	var char byte
-
-	if l.willOverflow() {
-		// TODO: Zero valued bytes, how?
-		return char, errors.New("Lexer will overflow")
+func (l *Lexer) CurrentChar() rune {
+	if l.reachedEnd {
+		return EOF
 	}
 
-	char = l.CurrentChar()
+	return rune(l.Source[l.index])
+}
+
+func (l *Lexer) NextChar() rune {
+	if l.willOverflow() {
+		l.reachedEnd = true
+		return EOF
+	}
+
+	char := l.CurrentChar()
 	l.index++
 
 	if char == '\n' {
@@ -63,84 +68,85 @@ func (l *Lexer) NextChar() (byte, error) {
 		l.Position.NextChar()
 	}
 
-	return char, nil
+	return char
 }
 
 // Returns the next lookahead character without advancing the lexer
-func (l *Lexer) Peek() (byte, error) {
+func (l *Lexer) Peek() rune {
 	if l.willOverflow() {
-		// TODO: Zero valued bytes, how?
-		return '\x00', errors.New("Lexer will overflow")
+		return EOF
 	}
 
-	return l.Source[l.index+1], nil
+	return rune(l.Source[l.index+1])
 }
 
 // Advances through the whole string source and tokenizes every lexeme
-// func (l *Lexer) Lex() ([]token.Token, error) {
-//   for r := l.Tokenize(); r != token.EOF; r = l.Tokenize()() {}
+func (l *Lexer) Lex() []token.Token {
+	for r := l.Tokenize(); r.Type != token.EOF; r = l.Tokenize() {
+	}
 
-//   return l.Tokens, nil
-// }
+	return l.Tokens
+}
 
 // Returns the next valid token in the input stream
 func (l *Lexer) Tokenize() token.Token {
 	var tok token.Token
-	// var err error
 
 	l.eatWhitespace()
 	char := l.CurrentChar()
+	str := string(char)
 
 	switch char {
+	case EOF:
+		tok = token.New(token.EOF, "(EOF)")
 	case '{':
-		tok = token.New(token.LBRACE, char)
+		tok = token.New(token.LBRACE, str)
 	case '}':
-		tok = token.New(token.RBRACE, char)
+		tok = token.New(token.RBRACE, str)
 	case '[':
-		tok = token.New(token.LBRACKET, char)
+		tok = token.New(token.LBRACKET, str)
 	case ']':
-		tok = token.New(token.RBRACKET, char)
+		tok = token.New(token.RBRACKET, str)
 	case ',':
-		tok = token.New(token.COMMA, char)
+		tok = token.New(token.COMMA, str)
 	case '.':
-		tok = token.New(token.DOT, char)
+		tok = token.New(token.DOT, str)
 	case '(':
-		tok = token.New(token.LPAREN, char)
+		tok = token.New(token.LPAREN, str)
 	case ')':
-		tok = token.New(token.RPAREN, char)
+		tok = token.New(token.RPAREN, str)
 	case ';':
-		tok = token.New(token.SEMICOLON, char)
+		tok = token.New(token.SEMICOLON, str)
 	case '!':
-		tok = token.New(token.BANG, char)
+		tok = token.New(token.BANG, str)
 	case '$':
-		tok = token.New(token.DOLLAR, char)
+		tok = token.New(token.DOLLAR, str)
 	case ':':
-		tok = token.New(token.COLON, char)
+		tok = token.New(token.COLON, str)
 	case '~':
-		tok = token.New(token.TILDE, char)
+		tok = token.New(token.TILDE, str)
 	case '+':
-		tok = token.New(token.PLUS, char)
+		tok = token.New(token.PLUS, str)
 	case '-':
-		tok = token.New(token.MINUS, char)
+		tok = token.New(token.MINUS, str)
 	case '&':
-		tok = token.New(token.AMP, char)
+		tok = token.New(token.AMP, str)
 	case '|':
-		tok = token.New(token.PIPE, char)
+		tok = token.New(token.PIPE, str)
 	case '^':
-		tok = token.New(token.CARET, char)
+		tok = token.New(token.CARET, str)
 	case '=':
-		tok = token.New(token.ASSIGN, char)
+		tok = token.New(token.ASSIGN, str)
 	case '<':
-		tok = token.New(token.LANGLE, char)
+		tok = token.New(token.LANGLE, str)
 	case '>':
-		tok = token.New(token.RANGLE, char)
+		tok = token.New(token.RANGLE, str)
 	case '*':
-		tok = token.New(token.STAR, char)
+		tok = token.New(token.STAR, str)
 	case '/':
-		peekedChar, err := l.Peek()
+		peekedChar := l.Peek()
 
-		// Maybe Peek should just return os.EOF constant or something
-		if err != nil {
+		if peekedChar == EOF {
 			panic("Out of bounds")
 		}
 
@@ -158,16 +164,16 @@ func (l *Lexer) Tokenize() token.Token {
 		}
 
 		// Must be a single token acting as an operator
-		tok = token.New(token.SLASH, char)
+		tok = token.New(token.SLASH, str)
 	case '%':
-		tok = token.New(token.PERC, char)
+		tok = token.New(token.PERC, str)
 	case '#':
 		l.eatCurrentLine()
 		return l.Tokenize()
 	// case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 	// token, _ := l.lexNumber()
 	default:
-		if isIdentifierFirst(rune(char)) {
+		if isIdentifierFirst(char) {
 			// NOTE: Error handling
 			tok, _ = l.lexIdentifier()
 		} else {
@@ -193,7 +199,7 @@ func (l *Lexer) eatWhitespace() {
 	}
 }
 
-func (l *Lexer) eatUntil(untilChar byte) {
+func (l *Lexer) eatUntil(untilChar rune) {
 	for l.CurrentChar() != untilChar {
 		l.NextChar()
 	}
@@ -210,24 +216,22 @@ func (l *Lexer) eatMultiLineComment() {
 }
 
 func (l *Lexer) lexIdentifier() (token.Token, error) {
+	var char rune
 	var endIndex int
 
-	reachedEnd := false
 	startIndex := l.index
 
-	for isIdentifier(rune(l.CurrentChar())) {
-		_, err := l.NextChar()
+	for isIdentifier(l.CurrentChar()) {
+		char = l.NextChar()
 
-		// Probably because we have reached the end of the source string
-		// TODO: Check for special EOF to make sure this is the case
-		if err != nil {
-			reachedEnd = true
+		if char == EOF {
 			break
 		}
 	}
 
-	// For half-open intervals
-	if reachedEnd {
+	// Because go has half-open ranges we need to go one further than the end index to get the full
+	// identifier
+	if l.reachedEnd {
 		endIndex = l.index + 1
 	} else {
 		endIndex = l.index
