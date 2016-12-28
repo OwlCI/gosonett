@@ -1,4 +1,4 @@
-.PHONE: test test-lint
+.PHONY: test test-lint
 
 all: test
 
