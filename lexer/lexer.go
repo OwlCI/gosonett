@@ -1,6 +1,7 @@
 package lexer
 
 import (
+	"errors"
 	"fmt"
 	"github.com/owlci/gosonett/token"
 	"unicode"
@@ -58,10 +59,26 @@ func (l *Lexer) CurrentChar() rune {
 	return rune(l.Source[l.index])
 }
 
-func (l *Lexer) NextChar() rune {
+// The first time we reach the end we expect the calling code to handle it correctly, either
+// by printing an error message for invalid source or by terminating the token. With this, we
+// are explicitly including EOF to be a valid lexeme in the token string.
+func (l *Lexer) invalidOverflow() bool {
 	if l.willOverflow() {
-		l.reachedEnd = true
-		return EOF
+		// We haven't reached the end yet
+		if l.reachedEnd == false {
+			l.reachedEnd = true
+			return false
+		}
+
+		return true
+	}
+
+	return false
+}
+
+func (l *Lexer) NextChar() (rune, error) {
+	if l.invalidOverflow() {
+		return EOF, errors.New("Unhandled end of input looking for the next character")
 	}
 
 	char := l.CurrentChar()
@@ -73,16 +90,16 @@ func (l *Lexer) NextChar() rune {
 		l.Position.NextChar()
 	}
 
-	return char
+	return char, nil
 }
 
 // Returns the next lookahead character without advancing the lexer
-func (l *Lexer) Peek() rune {
-	if l.willOverflow() {
-		return EOF
+func (l *Lexer) Peek() (rune, error) {
+	if l.invalidOverflow() {
+		return EOF, errors.New("Unhandled end of input peeking the next character")
 	}
 
-	return rune(l.Source[l.index+1])
+	return rune(l.Source[l.index+1]), nil
 }
 
 // Advances through the whole string source and tokenizes every lexeme
@@ -151,10 +168,10 @@ func (l *Lexer) Tokenize() token.Token {
 	case '*':
 		tok = token.New(token.STAR, str)
 	case '/':
-		peekedChar := l.Peek()
+		peekedChar, err := l.Peek()
 
-		if peekedChar == EOF {
-			panic("Out of bounds")
+		if err != nil {
+			panic(err)
 		}
 
 		// Single-line comment
@@ -217,8 +234,12 @@ func (l *Lexer) eatUntil(untilChar rune) string {
 	var eatenStr string
 
 	for l.CurrentChar() != untilChar {
-		char := l.NextChar()
+		char, err := l.NextChar()
 		// fmt.Printf("  (eat:%d) %q\n", l.index, char)
+
+		if err != nil {
+			panic(err)
+		}
 
 		eatenStr = eatenStr + string(char)
 	}
@@ -244,30 +265,23 @@ func (l *Lexer) eatMultiLineComment() {
 }
 
 func (l *Lexer) lexIdentifier() (token.Token, error) {
-	var char rune
-	var endIndex int
-
 	startIndex := l.index
 
 	for isIdentifier(l.CurrentChar()) {
-		char = l.NextChar()
+		char, err := l.NextChar()
 
 		// fmt.Printf("  (ident:%d) %q\n", l.index-1, char)
+
+		if err != nil {
+			panic(err)
+		}
 
 		if char == EOF {
 			break
 		}
 	}
 
-	// Because go has half-open ranges we need to go one further than the end index to get the full
-	// identifier
-	if l.reachedEnd {
-		endIndex = l.index + 1
-	} else {
-		endIndex = l.index
-	}
-
-	ident := l.Source[startIndex:endIndex]
+	ident := l.Source[startIndex:l.index]
 
 	// Backtrack one char to end on the last byte of the identifier/keyword
 	l.index--
