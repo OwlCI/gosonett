@@ -16,9 +16,6 @@ func runTokenMatches(t *testing.T, source string, tests []TokenMatcher) {
 	testsLength := len(tests)
 	tokensLength := len(tokens)
 
-	// t.Logf("Lengths match: %d, %d\n", testsLength, tokensLength)
-	// t.Logf("%v\n", tokens)
-
 	if testsLength != tokensLength {
 		t.Fatalf("Wrong token array length: expected=%d, got=%d", tokensLength, testsLength)
 	}

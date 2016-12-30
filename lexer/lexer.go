@@ -118,8 +118,6 @@ func (l *Lexer) Tokenize() token.Token {
 	char := l.CurrentChar()
 	str := string(char)
 
-	// fmt.Printf("(current:%d)%q\n", l.index, char)
-
 	switch char {
 	case EOF:
 		tok = token.New(token.EOF, "(EOF)")
@@ -235,7 +233,6 @@ func (l *Lexer) eatUntil(untilChar rune) string {
 
 	for l.CurrentChar() != untilChar {
 		char, err := l.NextChar()
-		// fmt.Printf("  (eat:%d) %q\n", l.index, char)
 
 		if err != nil {
 			panic(err)
@@ -270,8 +267,6 @@ func (l *Lexer) lexIdentifier() (token.Token, error) {
 	for isIdentifier(l.CurrentChar()) {
 		char, err := l.NextChar()
 
-		// fmt.Printf("  (ident:%d) %q\n", l.index-1, char)
-
 		if err != nil {
 			panic(err)
 		}
@@ -285,8 +280,6 @@ func (l *Lexer) lexIdentifier() (token.Token, error) {
 
 	// Backtrack one char to end on the last byte of the identifier/keyword
 	l.index--
-
-	// fmt.Printf("  (ident_end_on:%d) %q\n", l.index, l.CurrentChar())
 
 	// matchKeyword and return keyword token
 	tokenType := token.GetKeywordKind(ident)
