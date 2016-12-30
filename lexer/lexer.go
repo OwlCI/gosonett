@@ -2,6 +2,7 @@ package lexer
 
 import (
 	"errors"
+	"fmt"
 	"github.com/owlci/gosonett/token"
 	"unicode"
 )
@@ -20,13 +21,20 @@ func (lp *LexerPosition) NextChar() {
 	lp.lineChar++
 }
 
+func (lp *LexerPosition) Format() string {
+	return fmt.Sprintf("%w:%w", lp.line, lp.lineChar)
+}
+
 type Lexer struct {
 	Source       string
 	Tokens       []token.Token
 	Position     LexerPosition // represents position of char with new lines, good for debugging.
 	index        int           // hold the current index of currentChar within the whole input string
 	sourceLength int
+	reachedEnd   bool
 }
+
+const EOF = '\x00'
 
 func New(source string) *Lexer {
 	return &Lexer{
@@ -34,6 +42,7 @@ func New(source string) *Lexer {
 		Position:     LexerPosition{line: 0, lineChar: 0},
 		index:        0,
 		sourceLength: len(source),
+		reachedEnd:   false,
 	}
 }
 
@@ -42,19 +51,37 @@ func (l *Lexer) willOverflow() bool {
 }
 
 // NOTE: This might need to rune, depending on what character set jsonet supports.
-func (l *Lexer) CurrentChar() byte {
-	return l.Source[l.index]
-}
-
-func (l *Lexer) NextChar() (byte, error) {
-	var char byte
-
-	if l.willOverflow() {
-		// TODO: Zero valued bytes, how?
-		return char, errors.New("Lexer will overflow")
+func (l *Lexer) CurrentChar() rune {
+	if l.reachedEnd {
+		return EOF
 	}
 
-	char = l.CurrentChar()
+	return rune(l.Source[l.index])
+}
+
+// The first time we reach the end we expect the calling code to handle it correctly, either
+// by printing an error message for invalid source or by terminating the token. With this, we
+// are explicitly including EOF to be a valid lexeme in the token string.
+func (l *Lexer) invalidOverflow() bool {
+	if l.willOverflow() {
+		// We haven't reached the end yet
+		if l.reachedEnd == false {
+			l.reachedEnd = true
+			return false
+		}
+
+		return true
+	}
+
+	return false
+}
+
+func (l *Lexer) NextChar() (rune, error) {
+	if l.invalidOverflow() {
+		return EOF, errors.New("Unhandled end of input looking for the next character")
+	}
+
+	char := l.CurrentChar()
 	l.index++
 
 	if char == '\n' {
@@ -67,81 +94,82 @@ func (l *Lexer) NextChar() (byte, error) {
 }
 
 // Returns the next lookahead character without advancing the lexer
-func (l *Lexer) Peek() (byte, error) {
-	if l.willOverflow() {
-		// TODO: Zero valued bytes, how?
-		return '\x00', errors.New("Lexer will overflow")
+func (l *Lexer) Peek() (rune, error) {
+	if l.invalidOverflow() {
+		return EOF, errors.New("Unhandled end of input peeking the next character")
 	}
 
-	return l.Source[l.index+1], nil
+	return rune(l.Source[l.index+1]), nil
 }
 
 // Advances through the whole string source and tokenizes every lexeme
-// func (l *Lexer) Lex() ([]token.Token, error) {
-//   for r := l.Tokenize(); r != token.EOF; r = l.Tokenize()() {}
+func (l *Lexer) Lex() []token.Token {
+	for r := l.Tokenize(); r.Type != token.EOF; r = l.Tokenize() {
+	}
 
-//   return l.Tokens, nil
-// }
+	return l.Tokens
+}
 
 // Returns the next valid token in the input stream
 func (l *Lexer) Tokenize() token.Token {
 	var tok token.Token
-	// var err error
 
 	l.eatWhitespace()
 	char := l.CurrentChar()
+	str := string(char)
 
 	switch char {
+	case EOF:
+		tok = token.New(token.EOF, "(EOF)")
 	case '{':
-		tok = token.New(token.LBRACE, char)
+		tok = token.New(token.LBRACE, str)
 	case '}':
-		tok = token.New(token.RBRACE, char)
+		tok = token.New(token.RBRACE, str)
 	case '[':
-		tok = token.New(token.LBRACKET, char)
+		tok = token.New(token.LBRACKET, str)
 	case ']':
-		tok = token.New(token.RBRACKET, char)
+		tok = token.New(token.RBRACKET, str)
 	case ',':
-		tok = token.New(token.COMMA, char)
+		tok = token.New(token.COMMA, str)
 	case '.':
-		tok = token.New(token.DOT, char)
+		tok = token.New(token.DOT, str)
 	case '(':
-		tok = token.New(token.LPAREN, char)
+		tok = token.New(token.LPAREN, str)
 	case ')':
-		tok = token.New(token.RPAREN, char)
+		tok = token.New(token.RPAREN, str)
 	case ';':
-		tok = token.New(token.SEMICOLON, char)
+		tok = token.New(token.SEMICOLON, str)
 	case '!':
-		tok = token.New(token.BANG, char)
+		tok = token.New(token.BANG, str)
 	case '$':
-		tok = token.New(token.DOLLAR, char)
+		tok = token.New(token.DOLLAR, str)
 	case ':':
-		tok = token.New(token.COLON, char)
+		tok = token.New(token.COLON, str)
 	case '~':
-		tok = token.New(token.TILDE, char)
+		tok = token.New(token.TILDE, str)
 	case '+':
-		tok = token.New(token.PLUS, char)
+		tok = token.New(token.PLUS, str)
 	case '-':
-		tok = token.New(token.MINUS, char)
+		tok = token.New(token.MINUS, str)
 	case '&':
-		tok = token.New(token.AMP, char)
+		tok = token.New(token.AMP, str)
 	case '|':
-		tok = token.New(token.PIPE, char)
+		tok = token.New(token.PIPE, str)
 	case '^':
-		tok = token.New(token.CARET, char)
+		tok = token.New(token.CARET, str)
 	case '=':
-		tok = token.New(token.ASSIGN, char)
+		tok = token.New(token.ASSIGN, str)
 	case '<':
-		tok = token.New(token.LANGLE, char)
+		tok = token.New(token.LANGLE, str)
 	case '>':
-		tok = token.New(token.RANGLE, char)
+		tok = token.New(token.RANGLE, str)
 	case '*':
-		tok = token.New(token.STAR, char)
+		tok = token.New(token.STAR, str)
 	case '/':
 		peekedChar, err := l.Peek()
 
-		// Maybe Peek should just return os.EOF constant or something
 		if err != nil {
-			panic("Out of bounds")
+			panic(err)
 		}
 
 		// Single-line comment
@@ -158,16 +186,22 @@ func (l *Lexer) Tokenize() token.Token {
 		}
 
 		// Must be a single token acting as an operator
-		tok = token.New(token.SLASH, char)
+		tok = token.New(token.SLASH, str)
 	case '%':
-		tok = token.New(token.PERC, char)
+		tok = token.New(token.PERC, str)
 	case '#':
 		l.eatCurrentLine()
 		return l.Tokenize()
+	case '"', '\'':
+		// Whatever the opening char, we expect a closing char to match
+		// but skip the first occurance since it starts the string
+		l.NextChar()
+		stringValue := l.eatUntil(char)
+		tok = token.New(token.STRING, stringValue)
 	// case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 	// token, _ := l.lexNumber()
 	default:
-		if isIdentifierFirst(rune(char)) {
+		if isIdentifierFirst(char) {
 			// NOTE: Error handling
 			tok, _ = l.lexIdentifier()
 		} else {
@@ -193,47 +227,59 @@ func (l *Lexer) eatWhitespace() {
 	}
 }
 
-func (l *Lexer) eatUntil(untilChar byte) {
+// TODO: This should panic if it doesn't find *untilChar* and reaches EOF
+func (l *Lexer) eatUntil(untilChar rune) string {
+	var eatenStr string
+
 	for l.CurrentChar() != untilChar {
-		l.NextChar()
+		char, err := l.NextChar()
+
+		if err != nil {
+			panic(err)
+		}
+
+		eatenStr = eatenStr + string(char)
 	}
 
-	// Point to the byte after our until
+	return eatenStr
+}
+
+func (l *Lexer) eatUntilAfter(untilChar rune) string {
+	eatenStr := l.eatUntil(untilChar)
+
+	// Point to the byte after our untilChar
 	l.NextChar()
+
+	return eatenStr
 }
 
 func (l *Lexer) eatCurrentLine() {
-	l.eatUntil('\n')
+	l.eatUntilAfter('\n')
 }
 
+// TODO...
 func (l *Lexer) eatMultiLineComment() {
 }
 
 func (l *Lexer) lexIdentifier() (token.Token, error) {
-	var endIndex int
-
-	reachedEnd := false
 	startIndex := l.index
 
-	for isIdentifier(rune(l.CurrentChar())) {
-		_, err := l.NextChar()
+	for isIdentifier(l.CurrentChar()) {
+		char, err := l.NextChar()
 
-		// Probably because we have reached the end of the source string
-		// TODO: Check for special EOF to make sure this is the case
 		if err != nil {
-			reachedEnd = true
+			panic(err)
+		}
+
+		if char == EOF {
 			break
 		}
 	}
 
-	// For half-open intervals
-	if reachedEnd {
-		endIndex = l.index + 1
-	} else {
-		endIndex = l.index
-	}
+	ident := l.Source[startIndex:l.index]
 
-	ident := l.Source[startIndex:endIndex]
+	// Backtrack one char to end on the last byte of the identifier/keyword
+	l.index--
 
 	// matchKeyword and return keyword token
 	tokenType := token.GetKeywordKind(ident)
